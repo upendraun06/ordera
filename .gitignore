@@ -1,0 +1,16 @@
+node_modules/
+__pycache__/
+*.pyc
+.env
+
+# DB
+*.db
+*.db-shm
+*.db-wal
+
+# Virtual env
+venv/
+backend/venv/
+
+# OS
+.DS_Store
