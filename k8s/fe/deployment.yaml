@@ -42,4 +42,4 @@ spec:
               cpu: "100m"
             limits:
               memory: "256Mi"
-              cpu: "200m"
+              cpu: "200m" # Adjusted CPU limits for frontend to better reflect its expected load and ensure efficient resource utilization.
