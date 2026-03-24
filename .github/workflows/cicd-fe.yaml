@@ -8,6 +8,9 @@ on:
       - 'k8s/fe/**'
   workflow_dispatch:
 
+permissions:
+  contents: write    # ← Add this block
+
 env:
   ECR_REGISTRY: 405087531929.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY: ordera-app
