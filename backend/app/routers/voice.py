@@ -66,24 +66,25 @@ def _xml_response(content: str) -> Response:
 
 def _verify_telnyx_signature(request_body: bytes, timestamp: str, signature: str) -> bool:
     """
-    Verify Telnyx webhook using Ed25519 public key or HMAC signature.
-    Returns True if signature is valid or if public key is not configured (dev mode).
+    Verify Telnyx webhook using Ed25519 public key.
+    Returns True if valid, or if public key is not configured (dev mode).
     """
     if not settings.TELNYX_PUBLIC_KEY:
-        # Dev mode — skip verification
-        return True
+        return True  # Dev mode — skip verification
     try:
-        # Telnyx signs: timestamp + "|" + body
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+        from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+        from cryptography.exceptions import InvalidSignature
+
+        # Telnyx signs: timestamp + "|" + raw_body
         payload = f"{timestamp}|".encode() + request_body
-        # Try HMAC-SHA256 verification (Telnyx TeXML apps use this)
-        expected = hmac.new(
-            settings.TELNYX_PUBLIC_KEY.encode(),
-            payload,
-            hashlib.sha256,
-        ).hexdigest()
-        return hmac.compare_digest(expected, signature)
+        pub_key_bytes = base64.b64decode(settings.TELNYX_PUBLIC_KEY)
+        public_key = Ed25519PublicKey.from_public_bytes(pub_key_bytes)
+        sig_bytes = base64.b64decode(signature)
+        public_key.verify(sig_bytes, payload)
+        return True
     except Exception:
-        return True  # Don't block if verification setup is wrong
+        return False
 
 
 def _get_restaurant_by_telnyx_phone(db: Session, to_phone: str):
