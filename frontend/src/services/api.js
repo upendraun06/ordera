@@ -14,11 +14,13 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Redirect to login on 401
+// Redirect to login on 401 — but NOT for auth endpoints (wrong password shouldn't redirect)
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    const url = err.config?.url || ''
+    const isAuthEndpoint = url.startsWith('/auth/')
+    if (err.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem('token')
       localStorage.removeItem('owner')
       window.location.href = '/login'

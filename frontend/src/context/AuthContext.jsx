@@ -1,16 +1,7 @@
 import { createContext, useContext, useState } from 'react'
-import posthog from 'posthog-js'
 import { authApi } from '../services/api'
 
 const AuthContext = createContext(null)
-
-function _identify(owner) {
-  posthog.identify(owner.id, {
-    email: owner.email,
-    restaurant_name: owner.restaurant_name,
-    plan: owner.plan || 'essential',
-  })
-}
 
 export function AuthProvider({ children }) {
   const [owner, setOwner] = useState(() => {
@@ -26,8 +17,6 @@ export function AuthProvider({ children }) {
       localStorage.setItem('token', res.data.access_token)
       localStorage.setItem('owner', JSON.stringify(res.data.owner))
       setOwner(res.data.owner)
-      _identify(res.data.owner)
-      posthog.capture('login', { method: 'direct' })
     }
     return res.data // { message, otp?, dev_mode? } OR { access_token, owner }
   }
@@ -37,8 +26,6 @@ export function AuthProvider({ children }) {
     localStorage.setItem('token', res.data.access_token)
     localStorage.setItem('owner', JSON.stringify(res.data.owner))
     setOwner(res.data.owner)
-    _identify(res.data.owner)
-    posthog.capture('login', { method: 'otp' })
     return res.data
   }
 
@@ -47,8 +34,6 @@ export function AuthProvider({ children }) {
     localStorage.setItem('token', res.data.access_token)
     localStorage.setItem('owner', JSON.stringify(res.data.owner))
     setOwner(res.data.owner)
-    _identify(res.data.owner)
-    posthog.capture('signup', { restaurant_name: restaurantName })
     return res.data
   }
 
@@ -57,8 +42,6 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('token')
     localStorage.removeItem('owner')
     setOwner(null)
-    posthog.capture('logout')
-    posthog.reset()  // Clears identity so next user starts fresh
   }
 
   return (

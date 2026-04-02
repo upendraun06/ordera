@@ -5,12 +5,6 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 
-# PostHog key is baked in at build time (Vite replaces import.meta.env.VITE_* at build)
-ARG VITE_POSTHOG_KEY=""
-ARG VITE_POSTHOG_HOST="https://us.i.posthog.com"
-ENV VITE_POSTHOG_KEY=$VITE_POSTHOG_KEY
-ENV VITE_POSTHOG_HOST=$VITE_POSTHOG_HOST
-
 RUN npm run build
 
 FROM nginx:alpine

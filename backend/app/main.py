@@ -8,23 +8,6 @@ from contextlib import asynccontextmanager
 from app.config import settings
 from app.database import create_tables, run_migrations, SessionLocal
 
-# ── Sentry error tracking ────────────────────────────────────────────────────
-if settings.SENTRY_DSN:
-    import sentry_sdk
-    from sentry_sdk.integrations.fastapi import FastApiIntegration
-    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-    sentry_sdk.init(
-        dsn=settings.SENTRY_DSN,
-        integrations=[
-            FastApiIntegration(transaction_style="endpoint"),
-            SqlalchemyIntegration(),
-        ],
-        traces_sample_rate=0.1,   # 10% of requests for performance tracing
-        environment=settings.APP_ENV,
-        send_default_pii=False,   # Never send emails/passwords to Sentry
-    )
-    print(f"[Sentry] Initialized for environment: {settings.APP_ENV}")
-
 # Import all models so SQLAlchemy registers them before create_all
 import app.models  # noqa: F401
 

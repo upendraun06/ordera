@@ -131,4 +131,4 @@ def send_plan_change_confirmation(to_email: str, restaurant_name: str, old_plan:
 
 
 def _plan_rank(plan: str) -> int:
-    return {"basic": 0, "pro": 1, "enterprise": 2}.get(plan, 0)
+    return {"essential": 0, "pro": 1, "enterprise": 2}.get(plan, 0)

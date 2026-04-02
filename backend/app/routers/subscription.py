@@ -1,115 +1,55 @@
 """
-Subscription management endpoints.
-Full Stripe integration for plan checkout, webhooks, and billing portal.
-OTP verification required for all plan changes.
+Subscription Router
+===================
+HTTP endpoints for plan management, Stripe checkout, and billing portal.
+
+Business logic (plan definitions, billing cycles, usage alerts) lives in
+services/subscription_service.py — this file only handles HTTP concerns.
+
+Endpoints
+---------
+  GET  /api/subscription/plans            → Return all plans (no auth)
+  POST /api/subscription/send-plan-otp    → Email OTP for plan change
+  GET  /api/subscription/current          → Current plan + usage + billing
+  POST /api/subscription/create-checkout  → Start Stripe Checkout session
+  POST /api/subscription/create-portal    → Open Stripe billing portal
+  POST /api/subscription/change-plan      → Direct downgrade (no Stripe)
+  POST /api/subscription/cancel           → Cancel subscription at period end
+  POST /api/subscription/webhook          → Stripe webhook events
+  GET  /api/subscription/check-usage-alert → Manually trigger usage check
 """
-import calendar
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Request, Header
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
 from typing import Optional
 
-from app.database import get_db
-from app.models.owner import Owner
-from app.middleware.auth import get_current_owner
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from app.config import settings
+from app.database import get_db
+from app.middleware.auth import get_current_owner
+from app.models.owner import Owner
+from app.services.email_service import send_otp_email, send_plan_change_confirmation
+
+from app.services.otp_service import generate_otp, verify_otp
+from app.services.sms_service import send_sms
 from app.services.stripe_service import (
-    create_subscription_checkout,
-    create_customer_portal_session,
     cancel_subscription,
+    create_customer_portal_session,
+    create_subscription_checkout,
+    get_or_create_customer,
     get_subscription_details,
     verify_webhook,
-    get_or_create_customer,
 )
-from app.services.otp_service import generate_otp, verify_otp
-from app.services.email_service import (
-    send_otp_email,
-    send_usage_alert,
-    send_plan_change_confirmation,
+from app.services.subscription_service import (
+    PLANS,
+    billing_cycle_start,
+    check_usage_alert,
+    plan_rank,
+    safe_billing_date,
 )
-from app.services.sms_service import send_sms
 
 router = APIRouter(prefix="/api/subscription", tags=["subscription"])
-
-# ── Plan definitions ─────────────────────────────────────────────────────────
-
-PLANS = {
-    "essential": {
-        "name": "Essential",
-        "price": 79.99,
-        "price_label": "$79.99/mo",
-        "calls_per_month": 150,
-        "ai_model": "Claude Haiku",
-        "features": [
-            "Up to 150 AI calls/month",
-            "Instant call answering 24/7",
-            "Full order taking & confirmation",
-            "SMS order notifications",
-            "5 knowledge base documents",
-            "Stripe payment links",
-            "Email support",
-        ],
-        "limits": {
-            "calls_per_month": 150,
-            "documents": 5,
-            "menu_items": 50,
-            "sms_enabled": True,
-            "analytics": False,
-            "priority_support": False,
-        },
-    },
-    "pro": {
-        "name": "Pro",
-        "price": 199,
-        "price_label": "$199/mo",
-        "calls_per_month": 500,
-        "ai_model": "Claude Haiku + Sonnet",
-        "features": [
-            "Up to 500 AI calls/month",
-            "Advanced allergy & dietary detection",
-            "SMS + Stripe payment links",
-            "20 knowledge base documents",
-            "Full analytics dashboard",
-            "Call recording & transcripts",
-            "Priority email support",
-        ],
-        "limits": {
-            "calls_per_month": 500,
-            "documents": 20,
-            "menu_items": 200,
-            "sms_enabled": True,
-            "analytics": True,
-            "priority_support": True,
-        },
-        "popular": True,
-    },
-    "enterprise": {
-        "name": "Enterprise",
-        "price": 499,
-        "price_label": "$499/mo",
-        "calls_per_month": 2000,
-        "ai_model": "Claude Sonnet (all calls)",
-        "features": [
-            "Up to 2,000 AI calls/month",
-            "Claude Sonnet on every call",
-            "Full allergy & dietary handling",
-            "Unlimited knowledge base documents",
-            "Advanced analytics & reports",
-            "Multi-location support",
-            "Dedicated account manager",
-            "Custom AI personality & training",
-        ],
-        "limits": {
-            "calls_per_month": 2000,
-            "documents": -1,
-            "menu_items": -1,
-            "sms_enabled": True,
-            "analytics": True,
-            "priority_support": True,
-        },
-    },
-}
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -128,33 +68,6 @@ class SubscriptionResponse(BaseModel):
     plan_details: dict
     billing: dict
     usage: dict
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _plan_rank(plan: str) -> int:
-    return {"essential": 0, "pro": 1, "enterprise": 2}.get(plan, 0)
-
-
-def _safe_billing_date(base_date: datetime, year: int, month: int) -> datetime:
-    """Return a date clamped to the last valid day of the given month."""
-    last_day = calendar.monthrange(year, month)[1]
-    day = min(base_date.day, last_day)
-    return base_date.replace(year=year, month=month, day=day, hour=0, minute=0, second=0, microsecond=0)
-
-
-def _billing_cycle_start(owner: Owner) -> datetime:
-    created = owner.created_at or datetime.utcnow()
-    if isinstance(created, str):
-        created = datetime.fromisoformat(created)
-    now = datetime.utcnow()
-    cycle_start = _safe_billing_date(created, now.year, now.month)
-    if cycle_start > now:
-        if now.month == 1:
-            cycle_start = _safe_billing_date(created, now.year - 1, 12)
-        else:
-            cycle_start = _safe_billing_date(created, now.year, now.month - 1)
-    return cycle_start
 
 
 # ── Public endpoints ──────────────────────────────────────────────────────────
@@ -182,7 +95,7 @@ def send_plan_change_otp(
     identifier = f"plan_change:{current_owner.id}:{req.plan}"
     code = generate_otp(db, identifier)
 
-    action = "upgrade" if _plan_rank(req.plan) > _plan_rank(current_owner.plan or "essential") else "downgrade"
+    action = "upgrade" if plan_rank(req.plan) > plan_rank(current_owner.plan or "essential") else "downgrade"
     send_otp_email(current_owner.email, code, purpose=f"{action} to {PLANS[req.plan]['name']} plan")
 
     # Send SMS via Telnyx using the platform number (not the restaurant's own number)
@@ -205,53 +118,6 @@ def send_plan_change_otp(
     return response
 
 
-# ── Usage alert check ────────────────────────────────────────────────────────
-
-def check_usage_alert(db: Session, owner: Owner):
-    """
-    Check if the owner's call usage has reached 80% and send an alert email.
-    Uses DB-persisted timestamp so it survives restarts and multi-worker deployments.
-    """
-    plan_key = owner.plan or "essential"
-    plan = PLANS.get(plan_key)
-    if not plan:
-        return
-
-    calls_limit = plan["limits"]["calls_per_month"]
-    if calls_limit == -1:
-        return  # Unlimited plan
-
-    cycle_start = _billing_cycle_start(owner)
-
-    # Only send once per billing cycle
-    if owner.usage_alert_sent_at and owner.usage_alert_sent_at >= cycle_start:
-        return
-
-    from app.models.call_log import CallLog
-    restaurant_ids = [r.id for r in owner.restaurants] if owner.restaurants else []
-    if not restaurant_ids:
-        return
-
-    calls_used = (
-        db.query(CallLog)
-        .filter(CallLog.restaurant_id.in_(restaurant_ids), CallLog.created_at >= cycle_start)
-        .count()
-    )
-
-    pct = (calls_used / calls_limit) * 100 if calls_limit > 0 else 0
-    if pct >= 80:
-        owner.usage_alert_sent_at = datetime.utcnow()
-        db.commit()
-        send_usage_alert(
-            to_email=owner.email,
-            restaurant_name=owner.restaurant_name or "Your Restaurant",
-            calls_used=calls_used,
-            calls_limit=calls_limit,
-            percentage=int(pct),
-        )
-        print(f"[Usage Alert] Sent 80% alert to {owner.email}: {calls_used}/{calls_limit} ({int(pct)}%)")
-
-
 @router.get("/check-usage-alert")
 def trigger_usage_check(
     current_owner: Owner = Depends(get_current_owner),
@@ -272,12 +138,12 @@ def get_current_subscription(
     plan_key = current_owner.plan or "essential"
     plan_details = PLANS.get(plan_key, PLANS["essential"])
 
-    cycle_start = _billing_cycle_start(current_owner)
+    cycle_start = billing_cycle_start(current_owner)
 
     if cycle_start.month == 12:
-        next_billing = _safe_billing_date(cycle_start, cycle_start.year + 1, 1)
+        next_billing = safe_billing_date(cycle_start, cycle_start.year + 1, 1)
     else:
-        next_billing = _safe_billing_date(cycle_start, cycle_start.year, cycle_start.month + 1)
+        next_billing = safe_billing_date(cycle_start, cycle_start.year, cycle_start.month + 1)
 
     from app.models.call_log import CallLog
     restaurant_ids = [r.id for r in current_owner.restaurants] if current_owner.restaurants else []
@@ -430,7 +296,7 @@ def change_plan_direct(
     if req.plan == current_plan:
         raise HTTPException(status_code=400, detail="Already on this plan")
 
-    is_upgrade = _plan_rank(req.plan) > _plan_rank(current_plan)
+    is_upgrade = plan_rank(req.plan) > plan_rank(current_plan)
     if is_upgrade and settings.STRIPE_SECRET_KEY:
         raise HTTPException(
             status_code=400,

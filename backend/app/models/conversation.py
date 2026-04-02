@@ -14,6 +14,7 @@ class Conversation(Base):
     messages = Column(Text, default="[]")   # JSON array of {role, content} dicts
     order_id = Column(String, ForeignKey("orders.id"), nullable=True)
     status = Column(String, default="active")   # active | completed | abandoned
+    language_detected = Column(String, nullable=True)  # 'en' | 'es' | 'zh'
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

@@ -34,29 +34,50 @@ def send_order_confirmation(
     total: float,
     payment_link: str = None,
     wait_minutes: str = "20",
+    language: str = "en",
 ) -> bool:
     """Send order confirmation SMS with optional payment link."""
-    message_lines = [
-        f"✅ Order confirmed at {restaurant_name}!",
-        f"",
-        f"Your order:",
-        items_summary,
-        f"",
-        f"Total: ${total:.2f}",
-        f"Estimated wait: {wait_minutes} mins",
-    ]
-
-    if payment_link:
-        message_lines += [
+    if language == "es":
+        message_lines = [
+            f"✅ ¡Pedido confirmado en {restaurant_name}!",
             f"",
-            f"Pay securely here:",
-            payment_link,
+            f"Tu pedido:",
+            items_summary,
+            f"",
+            f"Total: ${total:.2f}",
+            f"Espera estimada: {wait_minutes} min",
         ]
+        if payment_link:
+            message_lines += ["", "Paga de forma segura aquí:", payment_link]
+        message_lines.append("\n¡Gracias por tu pedido!")
+    elif language == "zh":
+        message_lines = [
+            f"✅ {restaurant_name}订单已确认！",
+            f"",
+            f"您的订单：",
+            items_summary,
+            f"",
+            f"总计：${total:.2f}",
+            f"预计等待：{wait_minutes}分钟",
+        ]
+        if payment_link:
+            message_lines += ["", "安全支付链接：", payment_link]
+        message_lines.append("\n感谢您的订单！")
+    else:
+        message_lines = [
+            f"✅ Order confirmed at {restaurant_name}!",
+            f"",
+            f"Your order:",
+            items_summary,
+            f"",
+            f"Total: ${total:.2f}",
+            f"Estimated wait: {wait_minutes} mins",
+        ]
+        if payment_link:
+            message_lines += ["", "Pay securely here:", payment_link]
+        message_lines.append("\nThank you for your order!")
 
-    message_lines.append(f"\nThank you for your order!")
-    message = "\n".join(message_lines)
-
-    return send_sms(customer_phone, restaurant_phone, message)
+    return send_sms(customer_phone, restaurant_phone, "\n".join(message_lines))
 
 
 def send_payment_link(
