@@ -171,6 +171,7 @@ def get_plans():
 def send_plan_change_otp(
     req: PlanOtpRequest,
     current_owner: Owner = Depends(get_current_owner),
+    db: Session = Depends(get_db),
 ):
     """Send OTP to the owner's email for plan change verification."""
     if req.plan not in PLANS:
@@ -179,7 +180,7 @@ def send_plan_change_otp(
         raise HTTPException(status_code=400, detail="Already on this plan")
 
     identifier = f"plan_change:{current_owner.id}:{req.plan}"
-    code = generate_otp(identifier)
+    code = generate_otp(db, identifier)
 
     action = "upgrade" if _plan_rank(req.plan) > _plan_rank(current_owner.plan or "essential") else "downgrade"
     send_otp_email(current_owner.email, code, purpose=f"{action} to {PLANS[req.plan]['name']} plan")
@@ -343,7 +344,7 @@ def create_checkout(
         raise HTTPException(status_code=400, detail="Already on this plan")
 
     identifier = f"plan_change:{current_owner.id}:{req.plan}"
-    if not verify_otp(identifier, req.otp_code):
+    if not verify_otp(db, identifier, req.otp_code):
         raise HTTPException(status_code=400, detail="Invalid or expired verification code")
 
     if not settings.STRIPE_SECRET_KEY:
@@ -406,6 +407,51 @@ def create_portal(
         raise HTTPException(status_code=500, detail="Failed to create billing portal session")
 
     return {"portal_url": portal_url}
+
+
+class ChangePlanRequest(BaseModel):
+    plan: str
+
+
+@router.post("/change-plan")
+def change_plan_direct(
+    req: ChangePlanRequest,
+    current_owner: Owner = Depends(get_current_owner),
+    db: Session = Depends(get_db),
+):
+    """
+    Direct plan change (no Stripe checkout) — used for downgrades from Settings page.
+    Upgrades should go through /create-checkout (Stripe payment required).
+    """
+    if req.plan not in PLANS:
+        raise HTTPException(status_code=400, detail=f"Invalid plan: {req.plan}")
+
+    current_plan = current_owner.plan or "essential"
+    if req.plan == current_plan:
+        raise HTTPException(status_code=400, detail="Already on this plan")
+
+    is_upgrade = _plan_rank(req.plan) > _plan_rank(current_plan)
+    if is_upgrade and settings.STRIPE_SECRET_KEY:
+        raise HTTPException(
+            status_code=400,
+            detail="Upgrades require payment. Use the subscription page to upgrade."
+        )
+
+    # Downgrade (or upgrade in dev mode): cancel Stripe subscription at period end if active
+    if current_owner.stripe_subscription_id and not is_upgrade:
+        cancel_subscription(current_owner.stripe_subscription_id)
+
+    old_plan = current_plan
+    current_owner.plan = req.plan
+    current_owner.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(current_owner)
+    send_plan_change_confirmation(current_owner.email, current_owner.restaurant_name or "", old_plan, req.plan)
+
+    return {
+        "message": f"Plan changed from {old_plan} to {req.plan}",
+        "new_plan": req.plan,
+    }
 
 
 @router.post("/cancel")

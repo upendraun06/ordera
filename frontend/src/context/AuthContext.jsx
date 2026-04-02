@@ -10,8 +10,19 @@ export function AuthProvider({ children }) {
   })
   const [loading, setLoading] = useState(false)
 
-  const login = async (email, password) => {
-    const res = await authApi.login({ email, password })
+  const loginRequest = async (email, password) => {
+    const res = await authApi.loginRequest({ email, password })
+    // If SMTP not configured, backend issues token directly (no OTP step)
+    if (res.data.access_token) {
+      localStorage.setItem('token', res.data.access_token)
+      localStorage.setItem('owner', JSON.stringify(res.data.owner))
+      setOwner(res.data.owner)
+    }
+    return res.data // { message, otp?, dev_mode? } OR { access_token, owner }
+  }
+
+  const login = async (email, otp_code) => {
+    const res = await authApi.loginVerify({ email, otp_code })
     localStorage.setItem('token', res.data.access_token)
     localStorage.setItem('owner', JSON.stringify(res.data.owner))
     setOwner(res.data.owner)
@@ -34,7 +45,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ owner, setOwner, login, signup, logout, loading }}>
+    <AuthContext.Provider value={{ owner, setOwner, loginRequest, login, signup, logout, loading }}>
       {children}
     </AuthContext.Provider>
   )
