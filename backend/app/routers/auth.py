@@ -152,8 +152,9 @@ def send_otp(data: SendOTP, db: Session = Depends(get_db)):
 
     response: dict = {"message": f"OTP sent to {data.value}"}
 
-    # Only expose OTP in non-production dev mode (no SMTP configured)
-    if settings.APP_ENV != "production" and not settings.SMTP_HOST:
+    # Always expose OTP in non-production mode so developers can test
+    # without checking email (email is still sent when configured)
+    if settings.APP_ENV != "production":
         response["otp"] = code
         response["dev_mode"] = True
 
@@ -195,6 +196,28 @@ def update_phone(
     restaurant.phone = data.phone
     db.commit()
     return {"message": "Phone number updated", "phone": data.phone}
+
+
+@router.get("/otp-debug")
+def otp_debug(db: Session = Depends(get_db)):
+    """DEV ONLY — show all OTP entries in DB to diagnose verification issues."""
+    if settings.APP_ENV == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+    from app.models.otp import OTPCode
+    entries = db.query(OTPCode).all()
+    now = time.time()
+    return {
+        "count": len(entries),
+        "entries": [
+            {
+                "identifier": e.identifier,
+                "code": e.code,
+                "expires_in_seconds": round(e.expires_at - now),
+                "expired": now > e.expires_at,
+            }
+            for e in entries
+        ]
+    }
 
 
 @router.patch("/password")

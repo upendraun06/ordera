@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models.otp import OTPCode
 
-OTP_TTL_SECONDS = 300  # 5 minutes
+OTP_TTL_SECONDS = 600  # 10 minutes
 
 
 def generate_otp(db: Session, identifier: str) -> str:
@@ -31,21 +31,30 @@ def generate_otp(db: Session, identifier: str) -> str:
 
 def verify_otp(db: Session, identifier: str, code: str) -> bool:
     """Verify an OTP code. Deletes the OTP on successful verification."""
+    print(f"[OTP] verify called — identifier={identifier!r}, code={code!r}")
     entry = db.query(OTPCode).filter(OTPCode.identifier == identifier).first()
     if not entry:
+        print(f"[OTP] FAIL — no entry found for identifier={identifier!r}")
+        # Show all current entries for debugging
+        all_entries = db.query(OTPCode).all()
+        print(f"[OTP] All current entries: {[(e.identifier, e.code) for e in all_entries]}")
         return False
 
     # Expired
     if time.time() > entry.expires_at:
+        remaining = entry.expires_at - time.time()
+        print(f"[OTP] FAIL — code expired {abs(remaining):.0f}s ago")
         db.delete(entry)
         db.commit()
         return False
 
-    # Wrong code
-    if entry.code != code:
+    # Wrong code (strip whitespace to handle copy-paste issues)
+    if entry.code != code.strip():
+        print(f"[OTP] FAIL — code mismatch: stored={entry.code!r}, received={code.strip()!r}")
         return False
 
     # Correct — consume it
+    print(f"[OTP] OK — code matched, consuming")
     db.delete(entry)
     db.commit()
     return True

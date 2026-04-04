@@ -97,7 +97,7 @@ def save_credentials(creds, sender_email: str = '') -> None:
         data['expiry'] = creds.expiry.isoformat()
     with open(token_path(), 'w') as f:
         json.dump(data, f, indent=2)
-    print(f'[Gmail OAuth] Tokens saved — sender: {sender_email}')
+    print(f'[Gmail OAuth] Tokens saved - sender: {sender_email}')
 
 
 def remove_token() -> bool:
@@ -153,9 +153,11 @@ def send_email(to_email: str, subject: str, html_body: str) -> bool:
 
         raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
         service.users().messages().send(userId='me', body={'raw': raw}).execute()
-        print(f'[Gmail OAuth] ✓ Sent to {to_email}: {subject}')
+        print(f'[Gmail OAuth] OK Sent to {to_email}: {subject}')
         return True
 
     except Exception as e:
+        import traceback
         print(f'[Gmail OAuth] Error sending to {to_email}: {e}')
+        traceback.print_exc()
         return False

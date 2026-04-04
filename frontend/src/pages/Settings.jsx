@@ -461,7 +461,8 @@ export default function Settings() {
       window.history.replaceState({}, '', '/settings')
       setActiveTab('email')
     } else if (gmailParam === 'error') {
-      setToast({ message: 'Gmail connection failed. Try again.', type: 'error' })
+      const msg = params.get('msg')
+      setToast({ message: msg ? `Gmail error: ${msg}` : 'Gmail connection failed. Try again.', type: 'error' })
       window.history.replaceState({}, '', '/settings')
       setActiveTab('email')
     }

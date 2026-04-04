@@ -20,7 +20,6 @@ in Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client
 In production, replace with your actual domain.
 """
 
-import os
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 
@@ -29,11 +28,11 @@ from app.middleware.auth import get_current_owner
 from app.models.owner import Owner
 import app.services.gmail_oauth_service as gmail_svc
 
-# Allow plain http:// in development (OAuth2 normally requires https)
-if settings.APP_ENV != 'production':
-    os.environ.setdefault('OAUTHLIB_INSECURE_TRANSPORT', '1')
-
 router = APIRouter(prefix='/api/gmail', tags=['gmail'])
+
+# Note: authorize uses urllib directly (no oauthlib, no PKCE).
+#       callback uses requests.post directly to Google's token endpoint.
+#       This avoids all InsecureTransportError / PKCE verifier issues.
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -81,73 +80,99 @@ def gmail_status(current_owner: Owner = Depends(get_current_owner)):
 @router.get('/authorize')
 def gmail_authorize(current_owner: Owner = Depends(get_current_owner)):
     """
-    Generate a Google OAuth2 authorization URL and return it to the frontend.
-    The frontend will navigate the user's browser to this URL.
+    Build a Google OAuth2 authorization URL and return it to the frontend.
+    Uses urllib directly — no oauthlib, no PKCE, no transport quirks.
     Response: { url: str }
     """
     _require_credentials()
-    try:
-        from google_auth_oauthlib.flow import Flow
+    from urllib.parse import urlencode
 
-        flow = Flow.from_client_config(
-            _client_config(),
-            scopes=gmail_svc.SCOPES,
-            redirect_uri=_redirect_uri(),
-        )
-        auth_url, _ = flow.authorization_url(
-            access_type='offline',    # Request refresh_token
-            prompt='consent',         # Always return refresh_token (even if re-authorizing)
-            include_granted_scopes='true',
-        )
-        return {'url': auth_url}
-
-    except ImportError:
-        raise HTTPException(
-            status_code=500,
-            detail='google-auth-oauthlib is not installed. Run: pip install google-auth-oauthlib',
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    params = {
+        'client_id':     settings.GMAIL_CLIENT_ID,
+        'redirect_uri':  _redirect_uri(),
+        'response_type': 'code',
+        'scope':         ' '.join(gmail_svc.SCOPES),
+        'access_type':   'offline',   # ask Google for a refresh_token
+        'prompt':        'consent',   # always return refresh_token even if previously granted
+    }
+    auth_url = 'https://accounts.google.com/o/oauth2/auth?' + urlencode(params)
+    print(f'[Gmail OAuth] Auth URL built — redirect_uri={_redirect_uri()}')
+    return {'url': auth_url}
 
 
 @router.get('/callback')
 def gmail_callback(code: str = None, state: str = None, error: str = None):
     """
     OAuth2 redirect endpoint — Google sends the user here after authorization.
-    Exchanges the authorization code for tokens, fetches the sender Gmail address,
-    saves to gmail_token.json, then redirects the browser back to the frontend.
+    Exchanges the code via a direct HTTPS POST to Google (no oauthlib flow),
+    fetches the sender Gmail address, saves tokens, redirects to /settings.
     """
     if error or not code:
-        print(f'[Gmail OAuth] Callback error or denied: {error}')
+        print(f'[Gmail OAuth] Denied / error param: {error}')
         return RedirectResponse(f'{settings.FRONTEND_URL}/settings?gmail=denied')
 
     try:
-        from google_auth_oauthlib.flow import Flow
+        import requests as http
+
+        # ── Step 1: Exchange authorization code for tokens ────────────────────
+        print(f'[Gmail OAuth] Exchanging code for tokens...')
+        token_resp = http.post(
+            'https://oauth2.googleapis.com/token',
+            data={
+                'code':          code,
+                'client_id':     settings.GMAIL_CLIENT_ID,
+                'client_secret': settings.GMAIL_CLIENT_SECRET,
+                'redirect_uri':  _redirect_uri(),
+                'grant_type':    'authorization_code',
+            },
+            timeout=15,
+        )
+        token_data = token_resp.json()
+        print(f'[Gmail OAuth] Token response keys: {list(token_data.keys())}')
+
+        if 'error' in token_data:
+            print(f'[Gmail OAuth] Token error: {token_data}')
+            import urllib.parse
+            msg = urllib.parse.quote(f"{token_data.get('error')}: {token_data.get('error_description','')}"[:200])
+            return RedirectResponse(f'{settings.FRONTEND_URL}/settings?gmail=error&msg={msg}')
+
+        access_token  = token_data['access_token']
+        refresh_token = token_data.get('refresh_token')
+
+        if not refresh_token:
+            print('[Gmail OAuth] No refresh_token in response — user may need to re-authorize')
+            return RedirectResponse(f'{settings.FRONTEND_URL}/settings?gmail=error')
+
+        # ── Step 2: Fetch the Gmail address ───────────────────────────────────
+        from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
 
-        flow = Flow.from_client_config(
-            _client_config(),
+        creds = Credentials(
+            token=access_token,
+            refresh_token=refresh_token,
+            token_uri='https://oauth2.googleapis.com/token',
+            client_id=settings.GMAIL_CLIENT_ID,
+            client_secret=settings.GMAIL_CLIENT_SECRET,
             scopes=gmail_svc.SCOPES,
-            redirect_uri=_redirect_uri(),
         )
-        flow.fetch_token(code=code)
-        creds = flow.credentials
-
-        # Fetch the authenticated Gmail address to display in the UI
         service = build('gmail', 'v1', credentials=creds)
         profile = service.users().getProfile(userId='me').execute()
         sender_email = profile.get('emailAddress', '')
 
+        # ── Step 3: Persist tokens ─────────────────────────────────────────────
         gmail_svc.save_credentials(creds, sender_email=sender_email)
-        print(f'[Gmail OAuth] ✓ Connected: {sender_email}')
+        print(f'[Gmail OAuth] OK Connected as {sender_email}')
 
         return RedirectResponse(
             f'{settings.FRONTEND_URL}/settings?gmail=connected&email={sender_email}'
         )
 
     except Exception as e:
+        import traceback, urllib.parse
         print(f'[Gmail OAuth] Callback exception: {e}')
-        return RedirectResponse(f'{settings.FRONTEND_URL}/settings?gmail=error')
+        traceback.print_exc()
+        msg = urllib.parse.quote(str(e)[:200])
+        return RedirectResponse(f'{settings.FRONTEND_URL}/settings?gmail=error&msg={msg}')
 
 
 @router.post('/test')

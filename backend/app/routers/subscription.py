@@ -110,8 +110,9 @@ def send_plan_change_otp(
         "message": f"Verification code sent to {current_owner.email}",
         "email": current_owner.email,
     }
-    # Dev mode: return OTP when email not configured
-    if settings.APP_ENV != "production" and not settings.SMTP_HOST:
+    # Always expose OTP in non-production mode so developers can test
+    # without checking email (email is still sent when configured)
+    if settings.APP_ENV != "production":
         response["otp"] = code
         response["dev_mode"] = True
 
@@ -230,7 +231,9 @@ def create_checkout(
     if not verify_otp(db, identifier, req.otp_code):
         raise HTTPException(status_code=400, detail="Invalid or expired verification code")
 
-    if not settings.STRIPE_SECRET_KEY:
+    # Dev mode: Stripe not configured or key is a placeholder (sk_live_... / sk_test_...)
+    stripe_configured = bool(settings.STRIPE_SECRET_KEY and settings.STRIPE_SECRET_KEY.startswith("sk_"))
+    if not stripe_configured:
         # Dev mode: change plan directly
         old_plan = current_owner.plan or "essential"
         current_owner.plan = req.plan
@@ -274,8 +277,9 @@ def create_portal(
     current_owner: Owner = Depends(get_current_owner),
     db: Session = Depends(get_db),
 ):
+    stripe_configured = bool(settings.STRIPE_SECRET_KEY and settings.STRIPE_SECRET_KEY.startswith("sk_"))
     if not current_owner.stripe_customer_id:
-        if settings.STRIPE_SECRET_KEY:
+        if stripe_configured:
             customer_id = get_or_create_customer(current_owner.id, current_owner.email, current_owner.restaurant_name or "")
             if customer_id:
                 current_owner.stripe_customer_id = customer_id
@@ -314,7 +318,8 @@ def change_plan_direct(
         raise HTTPException(status_code=400, detail="Already on this plan")
 
     is_upgrade = plan_rank(req.plan) > plan_rank(current_plan)
-    if is_upgrade and settings.STRIPE_SECRET_KEY:
+    stripe_configured = bool(settings.STRIPE_SECRET_KEY and settings.STRIPE_SECRET_KEY.startswith("sk_"))
+    if is_upgrade and stripe_configured:
         raise HTTPException(
             status_code=400,
             detail="Upgrades require payment. Use the subscription page to upgrade."
