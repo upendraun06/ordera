@@ -1,3 +1,8 @@
+echo "secret.yaml" >> .gitignore
+```
+
+Your `.gitignore` will then look like:
+```
 node_modules/
 __pycache__/
 *.pyc
@@ -14,3 +19,5 @@ backend/venv/
 
 # OS
 .DS_Store
+
+secret.yaml
