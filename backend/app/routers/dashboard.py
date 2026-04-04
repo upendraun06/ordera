@@ -7,6 +7,7 @@ import random
 from app.database import get_db
 from app.models.order import Order, OrderItem
 from app.models.call_log import CallLog
+from app.models.conversation import Conversation
 from app.models.restaurant import Restaurant
 from app.middleware.auth import get_current_owner
 from app.models.owner import Owner
@@ -100,6 +101,24 @@ def get_call_stats(
             by_date.setdefault(day_str, 0)
             by_date[day_str] += 1
 
+    # Language breakdown — join call_logs → conversations via call_sid
+    lang_rows = (
+        db.query(Conversation.language_detected, func.count(Conversation.id).label("count"))
+        .join(CallLog, CallLog.call_sid == Conversation.call_sid)
+        .filter(
+            CallLog.restaurant_id == restaurant.id,
+            func.date(CallLog.created_at) >= since,
+            Conversation.language_detected.isnot(None),
+        )
+        .group_by(Conversation.language_detected)
+        .all()
+    )
+    _lang_labels = {"en": "English", "es": "Spanish", "zh": "Chinese"}
+    languages = {
+        _lang_labels.get(row.language_detected, row.language_detected): row.count
+        for row in lang_rows
+    }
+
     return {
         "total_calls": total_calls,
         "completed_calls": len(completed),
@@ -109,6 +128,7 @@ def get_call_stats(
         "calls_by_date": [
             {"date": d, "count": c} for d, c in sorted(by_date.items())
         ],
+        "languages": languages,
     }
 
 

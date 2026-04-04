@@ -47,6 +47,8 @@ def run_migrations():
     column_migrations = [
         # owners: usage_alert_sent_at added after initial deploy
         "ALTER TABLE owners ADD COLUMN IF NOT EXISTS usage_alert_sent_at TIMESTAMPTZ",
+        # conversations: language_detected added for multi-language support
+        "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS language_detected VARCHAR",
     ]
 
     with engine.connect() as conn:
