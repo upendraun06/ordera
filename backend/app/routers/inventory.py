@@ -38,7 +38,7 @@ from app.services.inventory_service import (
     upload_inventory,
 )
 
-router = APIRouter(prefix="/inventory", tags=["inventory"])
+router = APIRouter(prefix="/api/inventory", tags=["inventory"])
 
 
 def _get_restaurant(owner: Owner, db: Session) -> Restaurant:
@@ -329,7 +329,7 @@ def get_recommendations(
 @router.get("/logs", response_model=List[InventoryLogResponse])
 def get_inventory_logs(
     item_id: Optional[str] = Query(None),
-    change_type: Optional[str] = Query(None, regex="^(used|wasted|added)$"),
+    change_type: Optional[str] = Query(None, pattern="^(used|wasted|added)$"),
     limit: int = Query(100, ge=1, le=500),
     owner: Owner = Depends(get_current_owner),
     db: Session = Depends(get_db),

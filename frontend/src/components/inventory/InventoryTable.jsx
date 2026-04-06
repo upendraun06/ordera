@@ -1,10 +1,32 @@
 import { useState } from 'react'
 import { inventoryApi } from '../../services/inventoryApi'
 
-const STATUS = (item) => {
-  if (item.quantity === 0) return { label: 'Out', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' }
-  if (item.low_stock) return { label: 'Low', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' }
-  return { label: 'OK', color: '#22c55e', bg: 'rgba(34,197,94,0.12)' }
+function statusBadge(item) {
+  if (item.quantity === 0)
+    return { label: 'Out of Stock', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' }
+  if (item.low_stock)
+    return { label: 'Low Stock', color: '#b45309', bg: '#fffbeb', border: '#fde68a' }
+  return { label: 'In Stock', color: '#15803d', bg: '#f0fdf4', border: '#bbf7d0' }
+}
+
+const th = {
+  padding: '10px 14px',
+  textAlign: 'left',
+  fontSize: 12,
+  fontWeight: 600,
+  color: 'var(--text-3)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+  userSelect: 'none',
+  whiteSpace: 'nowrap',
+  background: 'var(--surface-2)',
+}
+
+const td = {
+  padding: '11px 14px',
+  fontSize: 13,
+  color: 'var(--text-1)',
+  borderTop: '1px solid var(--border)',
 }
 
 export default function InventoryTable({ items, onRefresh }) {
@@ -20,7 +42,7 @@ export default function InventoryTable({ items, onRefresh }) {
     .filter((i) => i.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
       let av = a[sortKey], bv = b[sortKey]
-      if (typeof av === 'string') av = av.toLowerCase(), bv = bv.toLowerCase()
+      if (typeof av === 'string') { av = av.toLowerCase(); bv = bv.toLowerCase() }
       return sortDir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1)
     })
 
@@ -57,42 +79,60 @@ export default function InventoryTable({ items, onRefresh }) {
   }
 
   const SortIcon = ({ k }) => (
-    <span style={{ opacity: sortKey === k ? 1 : 0.3, marginLeft: 4, fontSize: 10 }}>
+    <span style={{ opacity: sortKey === k ? 0.7 : 0.25, marginLeft: 4, fontSize: 10 }}>
       {sortKey === k && sortDir === 'desc' ? '▼' : '▲'}
     </span>
   )
 
+  const inlineInput = {
+    width: 90,
+    padding: '4px 8px',
+    borderRadius: 6,
+    border: '1px solid var(--primary)',
+    background: '#fff',
+    color: 'var(--text-1)',
+    fontSize: 13,
+    outline: 'none',
+  }
+
   return (
     <div>
-      <div className="mb-3">
+      {/* Search */}
+      <div style={{ marginBottom: 14 }}>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search items..."
-          className="w-full px-3 py-2 rounded-lg text-sm"
           style={{
-            background: 'var(--card-bg, rgba(255,255,255,0.06))',
-            border: '1px solid var(--border, rgba(255,255,255,0.1))',
-            color: 'var(--text, #e2e8f0)',
+            width: '100%',
+            maxWidth: 320,
+            padding: '8px 12px',
+            borderRadius: 8,
+            border: '1px solid var(--border)',
+            background: 'var(--surface-2)',
+            color: 'var(--text-1)',
+            fontSize: 13,
             outline: 'none',
           }}
         />
       </div>
 
       {filtered.length === 0 ? (
-        <div className="text-center py-10" style={{ color: 'rgba(255,255,255,0.3)', fontSize: 14 }}>
-          No inventory items yet. Upload some above.
+        <div style={{ color: 'var(--text-3)', fontSize: 14, padding: '32px 0', textAlign: 'center' }}>
+          {(items || []).length === 0
+            ? 'No inventory items yet. Use the Upload / Add Items button above.'
+            : 'No items match your search.'}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid var(--border, rgba(255,255,255,0.1))' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid var(--border)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <tr>
                 {[
                   { key: 'name', label: 'Item Name' },
                   { key: 'unit', label: 'Unit' },
                   { key: 'quantity', label: 'Quantity' },
-                  { key: 'cost_per_unit', label: 'Cost/Unit' },
+                  { key: 'cost_per_unit', label: 'Cost / Unit' },
                   { key: null, label: 'Total Value' },
                   { key: null, label: 'Status' },
                   { key: null, label: 'Actions' },
@@ -100,15 +140,7 @@ export default function InventoryTable({ items, onRefresh }) {
                   <th
                     key={label}
                     onClick={() => key && toggleSort(key)}
-                    style={{
-                      padding: '10px 14px',
-                      textAlign: 'left',
-                      color: 'rgba(255,255,255,0.5)',
-                      fontWeight: 500,
-                      cursor: key ? 'pointer' : 'default',
-                      userSelect: 'none',
-                      whiteSpace: 'nowrap',
-                    }}
+                    style={{ ...th, cursor: key ? 'pointer' : 'default' }}
                   >
                     {label}{key && <SortIcon k={key} />}
                   </th>
@@ -116,91 +148,82 @@ export default function InventoryTable({ items, onRefresh }) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((item, idx) => {
-                const status = STATUS(item)
+              {filtered.map((item) => {
+                const badge = statusBadge(item)
                 const isEditing = editId === item.id
                 return (
-                  <tr
-                    key={item.id}
-                    style={{
-                      borderBottom: idx < filtered.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
-                      background: isEditing ? 'rgba(9,76,178,0.08)' : 'transparent',
-                    }}
-                  >
-                    <td style={{ padding: '10px 14px', color: 'rgba(255,255,255,0.88)', fontWeight: 500 }}>
-                      {item.name}
-                    </td>
-                    <td style={{ padding: '10px 14px', color: 'rgba(255,255,255,0.5)' }}>{item.unit}</td>
-                    <td style={{ padding: '10px 14px' }}>
+                  <tr key={item.id} style={{ background: isEditing ? '#f0f6ff' : '#fff' }}>
+                    <td style={{ ...td, fontWeight: 600 }}>{item.name}</td>
+                    <td style={{ ...td, color: 'var(--text-2)' }}>{item.unit}</td>
+                    <td style={td}>
                       {isEditing ? (
                         <input
                           type="number"
                           value={editVal.quantity}
                           onChange={(e) => setEditVal({ ...editVal, quantity: parseFloat(e.target.value) || 0 })}
-                          style={{ width: 80, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6, padding: '2px 6px', color: '#fff', fontSize: 13 }}
+                          style={inlineInput}
                         />
-                      ) : (
-                        <span style={{ color: 'rgba(255,255,255,0.88)' }}>{item.quantity}</span>
-                      )}
+                      ) : item.quantity}
                     </td>
-                    <td style={{ padding: '10px 14px' }}>
+                    <td style={td}>
                       {isEditing ? (
                         <input
                           type="number"
                           step="0.01"
                           value={editVal.cost_per_unit}
                           onChange={(e) => setEditVal({ ...editVal, cost_per_unit: parseFloat(e.target.value) || 0 })}
-                          style={{ width: 80, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6, padding: '2px 6px', color: '#fff', fontSize: 13 }}
+                          style={inlineInput}
                         />
                       ) : (
-                        <span style={{ color: 'rgba(255,255,255,0.7)' }}>${item.cost_per_unit.toFixed(2)}</span>
+                        <span style={{ color: 'var(--text-2)' }}>${item.cost_per_unit.toFixed(2)}</span>
                       )}
                     </td>
-                    <td style={{ padding: '10px 14px', color: 'rgba(255,255,255,0.7)' }}>
+                    <td style={{ ...td, color: 'var(--text-2)' }}>
                       ${(item.quantity * item.cost_per_unit).toFixed(2)}
                     </td>
-                    <td style={{ padding: '10px 14px' }}>
+                    <td style={td}>
                       <span style={{
                         display: 'inline-block',
-                        padding: '2px 10px',
-                        borderRadius: 12,
+                        padding: '3px 10px',
+                        borderRadius: 20,
                         fontSize: 11,
                         fontWeight: 600,
-                        color: status.color,
-                        background: status.bg,
+                        color: badge.color,
+                        background: badge.bg,
+                        border: `1px solid ${badge.border}`,
                       }}>
-                        {status.label}
+                        {badge.label}
                       </span>
                     </td>
-                    <td style={{ padding: '10px 14px' }}>
+                    <td style={td}>
                       {isEditing ? (
-                        <div className="flex gap-2">
+                        <div style={{ display: 'flex', gap: 6 }}>
                           <button
                             onClick={() => saveEdit(item)}
                             disabled={saving}
-                            style={{ fontSize: 12, padding: '3px 10px', borderRadius: 6, background: '#094cb2', color: '#fff', border: 'none', cursor: 'pointer' }}
+                            style={{ padding: '4px 12px', borderRadius: 6, background: 'var(--primary)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
                           >
                             {saving ? '...' : 'Save'}
                           </button>
                           <button
                             onClick={() => setEditId(null)}
-                            style={{ fontSize: 12, padding: '3px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)', border: 'none', cursor: 'pointer' }}
+                            style={{ padding: '4px 10px', borderRadius: 6, background: 'var(--surface-3)', color: 'var(--text-2)', border: 'none', cursor: 'pointer', fontSize: 12 }}
                           >
                             Cancel
                           </button>
                         </div>
                       ) : (
-                        <div className="flex gap-2">
+                        <div style={{ display: 'flex', gap: 6 }}>
                           <button
                             onClick={() => startEdit(item)}
-                            style={{ fontSize: 12, padding: '3px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.6)', border: 'none', cursor: 'pointer' }}
+                            style={{ padding: '4px 12px', borderRadius: 6, background: 'var(--surface-2)', color: 'var(--text-2)', border: '1px solid var(--border)', cursor: 'pointer', fontSize: 12 }}
                           >
                             Edit
                           </button>
                           <button
                             onClick={() => deleteItem(item.id)}
                             disabled={deleting === item.id}
-                            style={{ fontSize: 12, padding: '3px 8px', borderRadius: 6, background: 'rgba(239,68,68,0.10)', color: '#f87171', border: 'none', cursor: 'pointer' }}
+                            style={{ padding: '4px 10px', borderRadius: 6, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', cursor: 'pointer', fontSize: 12 }}
                           >
                             {deleting === item.id ? '...' : 'Del'}
                           </button>

@@ -11,11 +11,11 @@ import ProfitCard from '../components/inventory/ProfitCard'
 import RecommendationsTable from '../components/inventory/RecommendationsTable'
 
 const TABS = [
-  { id: 'stock',    label: 'Stock' },
-  { id: 'mapping',  label: 'Mapping' },
-  { id: 'profit',   label: 'Profit' },
-  { id: 'waste',    label: 'Waste' },
-  { id: 'reorder',  label: 'Reorder' },
+  { id: 'stock',   label: 'Stock' },
+  { id: 'mapping', label: 'Mapping' },
+  { id: 'profit',  label: 'Profit' },
+  { id: 'waste',   label: 'Waste' },
+  { id: 'reorder', label: 'Reorder' },
 ]
 
 export default function Inventory() {
@@ -39,13 +39,14 @@ export default function Inventory() {
   return (
     <Layout>
       <div style={{ padding: '32px 40px', maxWidth: 1100 }}>
+
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, color: 'rgba(255,255,255,0.92)', margin: 0 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>
               Inventory
             </h1>
-            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', marginTop: 4 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 4 }}>
               Track stock, map ingredients, and monitor waste and profit
             </div>
           </div>
@@ -56,9 +57,9 @@ export default function Inventory() {
                 padding: '8px 18px',
                 borderRadius: 10,
                 fontSize: 13,
-                fontWeight: 500,
-                background: showUpload ? 'rgba(255,255,255,0.08)' : 'rgba(9,76,178,0.35)',
-                color: showUpload ? 'rgba(255,255,255,0.5)' : '#7eb0f0',
+                fontWeight: 600,
+                background: showUpload ? 'var(--surface-2)' : 'var(--primary)',
+                color: showUpload ? 'var(--text-2)' : '#fff',
                 border: 'none',
                 cursor: 'pointer',
               }}
@@ -69,23 +70,23 @@ export default function Inventory() {
         </div>
 
         {/* Tab bar */}
-        <div className="flex gap-1 mb-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 0 }}>
+        <div className="flex gap-1 mb-5" style={{ borderBottom: '2px solid var(--border)' }}>
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               style={{
-                padding: '8px 18px',
+                padding: '8px 20px',
                 borderRadius: '8px 8px 0 0',
                 border: 'none',
                 fontSize: 13,
-                fontWeight: 500,
+                fontWeight: 600,
                 cursor: 'pointer',
-                background: tab === t.id ? 'rgba(9,76,178,0.25)' : 'transparent',
-                color: tab === t.id ? '#7eb0f0' : 'rgba(255,255,255,0.4)',
-                borderBottom: tab === t.id ? '2px solid #3b82f6' : '2px solid transparent',
-                marginBottom: -1,
-                transition: 'all 0.15s',
+                background: 'transparent',
+                color: tab === t.id ? 'var(--primary)' : 'var(--text-3)',
+                borderBottom: tab === t.id ? '2px solid var(--primary)' : '2px solid transparent',
+                marginBottom: -2,
+                transition: 'color 0.15s',
               }}
             >
               {t.label}
@@ -93,23 +94,23 @@ export default function Inventory() {
           ))}
         </div>
 
-        {/* Content */}
-        <div
-          style={{
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 14,
-            padding: 24,
-          }}
-        >
-          {/* ── Stock tab ── */}
+        {/* Content card */}
+        <div style={{
+          background: 'var(--surface-1)',
+          border: '1px solid var(--border)',
+          borderRadius: 14,
+          padding: 24,
+          boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+        }}>
+
+          {/* ── Stock ── */}
           {tab === 'stock' && (
             <div>
               <LowStockAlert items={lowStockItems} />
 
               {showUpload && (
-                <div style={{ marginBottom: 28, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                  <div className="text-sm font-semibold mb-4" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                <div style={{ marginBottom: 28, paddingBottom: 24, borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)', marginBottom: 16 }}>
                     Add / Update Inventory
                   </div>
                   <UploadInventory onSuccess={() => { loadItems(); setShowUpload(false) }} />
@@ -117,7 +118,7 @@ export default function Inventory() {
               )}
 
               {loading ? (
-                <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13, padding: '20px 0' }}>
+                <div style={{ color: 'var(--text-3)', fontSize: 13, padding: '20px 0' }}>
                   Loading inventory...
                 </div>
               ) : (
@@ -126,38 +127,38 @@ export default function Inventory() {
             </div>
           )}
 
-          {/* ── Mapping tab ── */}
+          {/* ── Mapping ── */}
           {tab === 'mapping' && (
             <div>
-              <div className="text-sm mb-5" style={{ color: 'rgba(255,255,255,0.4)' }}>
+              <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 20 }}>
                 Link menu items to inventory ingredients so orders auto-deduct stock.
               </div>
               <MappingUI inventoryItems={items} />
             </div>
           )}
 
-          {/* ── Profit tab ── */}
+          {/* ── Profit ── */}
           {tab === 'profit' && (
             <div>
-              <div className="text-sm mb-5" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                Revenue, ingredient costs, and profit per day.
-                {items.length === 0 && ' Add inventory items and ingredient mappings to see cost data.'}
+              <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 20 }}>
+                Revenue, ingredient costs, and profit per day.{' '}
+                {items.length === 0 && 'Add inventory items and ingredient mappings to see cost data.'}
               </div>
               <ProfitCard />
             </div>
           )}
 
-          {/* ── Waste tab ── */}
+          {/* ── Waste ── */}
           {tab === 'waste' && (
             <div className="flex gap-10">
               <div style={{ flex: '0 0 380px' }}>
-                <div className="text-sm font-semibold mb-4" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)', marginBottom: 16 }}>
                   Log Waste
                 </div>
                 <WasteEntry inventoryItems={items} onSuccess={loadItems} />
               </div>
               <div style={{ flex: 1 }}>
-                <div className="text-sm font-semibold mb-4" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)', marginBottom: 16 }}>
                   Waste Analytics (last 30 days)
                 </div>
                 <WasteCard />
@@ -165,10 +166,10 @@ export default function Inventory() {
             </div>
           )}
 
-          {/* ── Reorder tab ── */}
+          {/* ── Reorder ── */}
           {tab === 'reorder' && (
             <div>
-              <div className="text-sm mb-5" style={{ color: 'rgba(255,255,255,0.4)' }}>
+              <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 20 }}>
                 Weekly reorder suggestions based on the last 7 days of usage.
               </div>
               <RecommendationsTable />

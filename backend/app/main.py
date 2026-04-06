@@ -97,7 +97,7 @@ app.include_router(payments.router)
 app.include_router(restaurant.router)
 app.include_router(subscription.router)
 app.include_router(gmail_oauth.router)
-app.include_router(inventory.router, prefix="/api", tags=["inventory"])
+app.include_router(inventory.router)
 
 
 @app.get("/")

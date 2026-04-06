@@ -1,6 +1,17 @@
 import { useState } from 'react'
 import { inventoryApi } from '../../services/inventoryApi'
 
+const inputStyle = {
+  background: 'var(--surface-2)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  color: 'var(--text-1)',
+  fontSize: 13,
+  padding: '9px 12px',
+  outline: 'none',
+  width: '100%',
+}
+
 export default function WasteEntry({ inventoryItems, onSuccess }) {
   const [itemId, setItemId] = useState('')
   const [quantity, setQuantity] = useState('')
@@ -29,32 +40,27 @@ export default function WasteEntry({ inventoryItems, onSuccess }) {
 
   const selectedItem = inventoryItems.find((i) => i.id === itemId)
 
-  const inputStyle = {
-    background: 'rgba(255,255,255,0.06)',
-    border: '1px solid rgba(255,255,255,0.12)',
-    borderRadius: 8,
-    color: '#e2e8f0',
-    fontSize: 13,
-    padding: '9px 12px',
-    outline: 'none',
-    width: '100%',
-  }
-
   return (
-    <form onSubmit={submit} style={{ maxWidth: 400 }}>
-      <div className="text-sm mb-4" style={{ color: 'rgba(255,255,255,0.5)' }}>
-        Record spoilage or disposal — deducted from stock immediately.
+    <form onSubmit={submit}>
+      <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 20 }}>
+        Record spoilage or disposal — quantity is deducted from stock immediately.
       </div>
 
       {message.text && (
-        <div className="mb-4 text-sm" style={{ color: message.ok ? '#4ade80' : '#f87171' }}>
+        <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, fontSize: 13,
+          background: message.ok ? '#f0fdf4' : '#fef2f2',
+          border: `1px solid ${message.ok ? '#bbf7d0' : '#fecaca'}`,
+          color: message.ok ? '#15803d' : '#dc2626',
+        }}>
           {message.text}
         </div>
       )}
 
-      <div className="space-y-3">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
-          <label className="block text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>Item</label>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-2)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Item
+          </label>
           <select value={itemId} onChange={(e) => setItemId(e.target.value)} style={inputStyle}>
             <option value="">Select inventory item…</option>
             {inventoryItems.map((i) => (
@@ -66,7 +72,7 @@ export default function WasteEntry({ inventoryItems, onSuccess }) {
         </div>
 
         <div>
-          <label className="block text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-2)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Quantity wasted {selectedItem ? `(${selectedItem.unit})` : ''}
           </label>
           <input
@@ -81,7 +87,9 @@ export default function WasteEntry({ inventoryItems, onSuccess }) {
         </div>
 
         <div>
-          <label className="block text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>Note (optional)</label>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-2)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Note (optional)
+          </label>
           <input
             type="text"
             value={note}
@@ -94,7 +102,17 @@ export default function WasteEntry({ inventoryItems, onSuccess }) {
         <button
           type="submit"
           disabled={loading}
-          style={{ padding: '9px 24px', borderRadius: 8, background: 'rgba(239,68,68,0.20)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.30)', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}
+          style={{
+            padding: '10px 24px',
+            borderRadius: 8,
+            background: '#fef2f2',
+            color: '#dc2626',
+            border: '1px solid #fecaca',
+            cursor: 'pointer',
+            fontSize: 13,
+            fontWeight: 600,
+            alignSelf: 'flex-start',
+          }}
         >
           {loading ? 'Logging...' : 'Log Waste'}
         </button>
